@@ -1,0 +1,4 @@
+Flask>=2.0
+python-dotenv>=0.15
+requests>=2.20
+google-cloud-firestore>=2.20.1
