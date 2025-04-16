@@ -7,6 +7,7 @@ import uuid # Only if generating UUIDs *here*, usually Forge generates them
 from flask import Flask, request, jsonify, abort
 from dotenv import load_dotenv
 
+#from google.oauth2 import service_account
 # Load environment variables from .env file
 load_dotenv()
 
@@ -26,7 +27,11 @@ if not PROXY_TO_FORGE_SECRET:
 # if not REGISTER_API_KEY: # Optional: uncomment if you want to enforce registration key
 #     print("Warning: REGISTER_API_KEY environment variable not set. Registration endpoint is less secure.")
 try:
-    db = firestore.Client()
+    #creds = service_account.Credentials.from_service_account_file("gcloud-key.json")
+    db = firestore.Client(
+        project="psyched-option-454007-u6", database="test"
+    )
+    #db = firestore.Client()
     FIRESTORE_COLLECTION = "forge_installation_mappings" # Define collection name
     print(f"Firestore client initialized. Using collection: {FIRESTORE_COLLECTION}")
 except Exception as e:
@@ -167,6 +172,6 @@ def health_check():
 # --- Run the App ---
 if __name__ == '__main__':
     # Use PORT environment variable if available (for deployment platforms)
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 9233))
     # Set debug=False for production
     app.run(host='0.0.0.0', port=port, debug=True)
