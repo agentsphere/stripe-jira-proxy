@@ -12,6 +12,7 @@ import stripe
 # --- Load Environment Variables ---
 load_dotenv()
 
+
 # --- Logging Configuration ---
 # Configure logging BEFORE anything else tries to log
 log_format = '%(asctime)s - %(name)s - %(levelname)s - %(process)d - [%(filename)s:%(lineno)d] - %(message)s'
@@ -24,6 +25,7 @@ logging.basicConfig(
 )
 # Get a logger instance for this module
 logger = logging.getLogger(__name__)
+logger.info("This is version 0.0.1")
 
 # --- Configuration ---
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY') # Needed if making API calls *from* here, not needed just for webhooks
