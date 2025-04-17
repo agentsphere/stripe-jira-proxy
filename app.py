@@ -157,7 +157,7 @@ async def handle_stripe_webhook():
         if event_id is None:
             logger.error("Error: Event ID not found in payload.")
             return jsonify(status='invalid payload'), 400
-        event = await stripe.events.retrieve(event_id);
+        event = stripe.Event.retrieve(event_id);
         if event is None:
             logger.error("Error: Event not found in Stripe.")
             return jsonify(status='event_not_found'), 400
