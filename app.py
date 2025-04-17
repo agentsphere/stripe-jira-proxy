@@ -137,7 +137,7 @@ def register_forge_installation():
 
 
 @app.route('/stripe-webhook', methods=['POST'])
-def handle_stripe_webhook():
+async def handle_stripe_webhook():
     """
     Receives webhook events from Stripe, verifies signature, looks up
     Forge URL from Firestore based on metadata, and forwards the event.
@@ -145,31 +145,27 @@ def handle_stripe_webhook():
     logger.info("'/stripe-webhook' endpoint called.")
     payload = request.data # Raw body
 
+
     logger.info("Received webhook payload (length: %d bytes).", len(payload))
     logger.debug("Webhook payload: %s", payload) # Be cautious with logging sensitive data
-
-    # Debug log the actual payload if necessary, but be wary of size/sensitivity
-    raw_payload_str = payload.decode('utf-8', errors='ignore')
-    
-    #1. Verify Stripe Signature (Crucial for Security - ADD THIS LATER)
-    sig_header = request.headers.get('Stripe-Signature')
+    event= None
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, STRIPE_WEBHOOK_SECRET
-        )
-        # Use lazy formatting
-        logger.info("Stripe webhook signature verified successfully for event ID: %s", event.get('id', 'N/A'))
-    except ValueError as e:
+        # Debug log the actual payload if necessary, but be wary of size/sensitivity
+        json_object = json.loads(payload)
+        logger.debug("Parsed JSON object: %s", json_object) # Be cautious with sensitive data
+        event_id=json_object.get("id", None)
+        if event_id is None:
+            logger.error("Error: Event ID not found in payload.")
+            return jsonify(status='invalid payload'), 400
+        event = await stripe.events.retrieve(event_id);
+        if event is None:
+            logger.error("Error: Event not found in Stripe.")
+            return jsonify(status='event_not_found'), 400
+    except Exception as e:
         # Invalid payload
         # Use lazy formatting
-        logger.error("Stripe webhook signature verification failed (ValueError): %s", e)
+        logger.error("Error: %s", e)
         return jsonify(status='invalid payload'), 400
-    except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
-        # Use lazy formatting
-        logger.error("Stripe webhook signature verification failed (SignatureVerificationError): %s", e)
-        return jsonify(status='invalid signature'), 400
-    # If verified, use 'event' dict instead of parsing json manually
 
     pi_obj = stripe.PaymentIntent.retrieve(event.data.object.payment_intent) # Example of using the event dat
     logger.info("PaymentIntent object retrieved: %s", pi_obj)
