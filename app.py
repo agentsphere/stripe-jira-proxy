@@ -225,14 +225,22 @@ async def handle_stripe_webhook():
 
 
     # 4. Forward Request to Forge Web Trigger
-    headers = request.headers
-    headers['X-AgentSphere-Proxy-Secret'] = PROXY_TO_FORGE_SECRET # Copy headers from the original request{
+    forward_headers = dict(request.headers)
+
+    # 2. Add your custom header to the *copy*
+    forward_headers['X-AgentSphere-Proxy-Secret'] = PROXY_TO_FORGE_SECRET
+
+    # 3. OPTIONAL BUT RECOMMENDED: Remove hop-by-hop headers like 'Host'.
+    #    The 'requests' library will typically set the correct Host header
+    #    for the destination URL (FORGE_URL). Including the original Host
+    #    header from the incoming request is usually incorrect for a proxy.
+    forward_headers.pop('Host', None)
 
     try:
         # Use lazy formatting
         logger.info("Forwarding event for UUID %s to configured Forge URL...",
                     installation_uuid)
-        response = requests.post(forge_url, headers=headers, data=payload, timeout=15) # Increased timeout slightly
+        response = requests.post(forge_url, headers=forward_headers, data=payload, timeout=15) # Increased timeout slightly
         response.raise_for_status() # Raises HTTPError for bad responses (4xx or 5xx)
         # Use lazy formatting (%s is fine for status code, or %d)
         logger.info("Successfully forwarded event for UUID %s. Forge response status: %s",
