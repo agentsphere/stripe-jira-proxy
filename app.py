@@ -225,7 +225,7 @@ async def handle_stripe_webhook():
 
 
     # 4. Forward Request to Forge Web Trigger
-    headers = request.headers.copy()
+    headers = request.headers
     headers['X-AgentSphere-Proxy-Secret'] = PROXY_TO_FORGE_SECRET # Copy headers from the original request{
 
     try:
