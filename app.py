@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, abort
 from dotenv import load_dotenv
 import logging # Import the logging library
 import sys # Needed for StreamHandler output
+import stripe
 
 # --- Load Environment Variables ---
 load_dotenv()
@@ -36,7 +37,7 @@ if not STRIPE_WEBHOOK_SECRET:
     exit(1)
 else:
     logger.info("STRIPE_WEBHOOK_SECRET found.")
-
+stripe.api_key = STRIPE_SECRET_KEY # Set if not already done globally
 if not PROXY_TO_FORGE_SECRET:
     logger.critical("CRITICAL: PROXY_TO_FORGE_SECRET environment variable not set. Exiting.")
     exit(1)
@@ -132,6 +133,7 @@ def register_forge_installation():
     return jsonify({"status": "registered", "installation_uuid": installation_uuid}), 200
 
 
+
 @app.route('/stripe-webhook', methods=['POST'])
 def handle_stripe_webhook():
     """
@@ -142,16 +144,34 @@ def handle_stripe_webhook():
     payload = request.data # Raw body
 
     logger.info("Received webhook payload (length: %d bytes).", len(payload))
+    logger.debug("Webhook payload: %s", payload) # Be cautious with logging sensitive data
 
+    # Debug log the actual payload if necessary, but be wary of size/sensitivity
+    raw_payload_str = payload.decode('utf-8', errors='ignore')
+    
+    #1. Verify Stripe Signature (Crucial for Security - ADD THIS LATER)
+    sig_header = request.headers.get('Stripe-Signature')
     try:
-        data_json = json.loads(payload)
-    except json.JSONDecodeError as e:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
         # Use lazy formatting
-        logger.error("Failed to parse webhook JSON payload: %s", e)
-        return jsonify({"status": "error", "message": "Invalid JSON payload"}), 400
-    # --- End of non-verification block ---
+        logger.info("Stripe webhook signature verified successfully for event ID: %s", event.get('id', 'N/A'))
+    except ValueError as e:
+        # Invalid payload
+        # Use lazy formatting
+        logger.error("Stripe webhook signature verification failed (ValueError): %s", e)
+        return jsonify(status='invalid payload'), 400
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        # Use lazy formatting
+        logger.error("Stripe webhook signature verification failed (SignatureVerificationError): %s", e)
+        return jsonify(status='invalid signature'), 400
+    # If verified, use 'event' dict instead of parsing json manually
 
-    metadata = data_json.get('metadata', {})
+    pi_obj = stripe.PaymentIntent.retrieve(event.data.object.payment_intent) # Example of using the event dat
+    logger.info("PaymentIntent object retrieved: %s", pi_obj)
+    metadata = pi_obj.get('metadata', {})
 
     installation_uuid = metadata.get('installation_uuid') # Key must match what Forge sends
 
