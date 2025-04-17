@@ -30,7 +30,7 @@ logger.info("This is version 0.0.1")
 # --- Configuration ---
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY') # Needed if making API calls *from* here, not needed just for webhooks
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
-PROXY_TO_FORGE_SECRET = os.getenv('PROXY_TO_FORGE_SECRET')
+#PROXY_TO_FORGE_SECRET = os.getenv('PROXY_TO_FORGE_SECRET') # no longer needed using forge created jwt tokens
 REGISTER_API_KEY = os.getenv('REGISTER_API_KEY') # Secret to protect registration
 
 # Basic input validation with logging
@@ -39,13 +39,13 @@ if not STRIPE_WEBHOOK_SECRET:
     exit(1)
 else:
     logger.info("STRIPE_WEBHOOK_SECRET found.")
-stripe.api_key = STRIPE_SECRET_KEY # Set if not already done globally
-if not PROXY_TO_FORGE_SECRET:
-    logger.critical("CRITICAL: PROXY_TO_FORGE_SECRET environment variable not set. Exiting.")
+if not STRIPE_SECRET_KEY:
+    logger.critical("CRITICAL: STRIPE_SECRET_KEY environment variable not set. Exiting.")
     exit(1)
 else:
     logger.info("PROXY_TO_FORGE_SECRET found.")
 
+stripe.api_key = STRIPE_SECRET_KEY # Set if not already done globally
 if not REGISTER_API_KEY: # Optional: uncomment if you want to enforce registration key
     logger.warning("Warning: REGISTER_API_KEY environment variable not set. Registration endpoint is less secure.")
 else:
@@ -170,9 +170,15 @@ async def handle_stripe_webhook():
     pi_obj = stripe.PaymentIntent.retrieve(event.data.object.payment_intent) # Example of using the event dat
     logger.info("PaymentIntent object retrieved: %s", pi_obj)
     metadata = pi_obj.get('metadata', {})
+    token = metadata.get('token') # Key must match what Forge sends
+    if not token:
+        # Use lazy formatting
+        logger.warning("Webhook event (token: %s) missing 'token' in data.object.metadata. Cannot forward.",
+                       token)
+        # Return 200 OK to Stripe so it doesn't retry, but log the issue.
+        return jsonify({"status": "received_missing_metadata"}), 200
 
-    installation_uuid = metadata.get('installation_uuid') # Key must match what Forge sends
-
+    installation_uuid = metadata.get('installationId') # Key must match what Forge sends
     if not installation_uuid:
         # Use lazy formatting
         logger.warning("Webhook event (installation_uuid: %s) missing 'installation_uuid' in data.object.metadata. Cannot forward.",
@@ -228,7 +234,7 @@ async def handle_stripe_webhook():
     forward_headers = dict(request.headers)
 
     # 2. Add your custom header to the *copy*
-    forward_headers['X-AgentSphere-Proxy-Secret'] = PROXY_TO_FORGE_SECRET
+    forward_headers['x-agentsphere-token'] = f"Bearer {token}"
 
     # 3. OPTIONAL BUT RECOMMENDED: Remove hop-by-hop headers like 'Host'.
     #    The 'requests' library will typically set the correct Host header
